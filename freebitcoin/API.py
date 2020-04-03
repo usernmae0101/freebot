@@ -26,17 +26,12 @@ class API:
 
             self.csrf_token = r.cookies.get('csrf_token')
 
-    def parse_coins(self):
-        with self.session as s:
-            r = s.get('https://freebitco.in/?op=home')
-            r.raise_for_status()
-
-            soup = BeautifulSoup(r.text, 'html.parser')
-            return soup.find(id='balance_small').text
-
     def parse_hash(self, token):
         with self.session as s:
-            r = s.get('https://freebitco.in/cgi-bin/fp_check.pl?s={token}')
+            r = s.get(f'https://freebitco.in/cgi-bin/fp_check.pl?s={token}&csrf_token={self.csrf_token}', headers={
+                'x-csrf-token': self.csrf_token,
+                'X-Requested-With': 'XMLHttpRequest'
+            })
             r.raise_for_status()
 
             return r.text
@@ -59,7 +54,9 @@ class API:
                 for cookie in [requests.cookies.create_cookie(name, value, domain='freebitco.in', path='/') 
                                for name, value in [('btc_address', r.text.split(':')[1]),
                                                    ('password', r.text.split(':')[2]),
-                                                   ('have_account', '1')]]:
+                                                   ('have_account', '1'),
+                                                   ('cookieconsent_dismissed', 'yes'),
+                                                   ('hide_push_msg', '1')]]:
                     self.session.cookies.set_cookie(cookie)
             except Exception:
                 raise IndexError(f'{login}; {r.text}') # auth error         
@@ -86,11 +83,20 @@ class API:
                 'pwc': soup.find(id='pwc_input')['value']
             }
 
-            data[token_key1] = token_val1, 
-            data[token_key2] = token_val2,
+            data[token_key1] = token_val1 
+            data[token_key2] = token_val2
             data['g_recaptcha_response'] = RucaptchaAPI.solve_captcha(self.key) 
 
             return data
+
+    def parse_coins(self):
+        with self.session as s:
+            r = s.get('https://freebitco.in/?op=home')
+            r.raise_for_status()
+
+            soup = BeautifulSoup(r.text, 'html.parser')
+            
+            return soup.find(id='balance_small').text        
 
     def collect_coins(self, data) -> tuple:
         with self.session as s:
@@ -101,4 +107,4 @@ class API:
             }, data=data)
             r.raise_for_status()
 
-            return (r.text, 'ss')
+            return (r.text.split(':')[2], r.text.split(':')[3])

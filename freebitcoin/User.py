@@ -1,5 +1,6 @@
 from PySide2.QtCore import QObject, Signal
 from time import sleep, time
+from random import randint
 
 from freebitcoin.API import API
 from helpers.RucaptchaAPI import RucaptchaAPI
@@ -34,6 +35,11 @@ class User(QObject):
             self.alert_user(True)
             
             while True:
-                sleep(3600)
+                current_balance, coins = self.api.collect_coins( self.api.create_data() )
+                self.update_chart(coins)
+                self.update_balance(current_balance)
+
+                sleep(3600 + randint(23, 78))
         except Exception as msg:
             self.alert_user(False)
+            print(msg)
