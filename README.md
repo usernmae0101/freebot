@@ -1,4 +1,5 @@
-# freebot
+# freebot ![Python 3.7.5](https://img.shields.io/badge/python-3.7.5-blue)
+
 ***
 
 [Wiki page](https://github.com/username10101/freebot/wiki)
