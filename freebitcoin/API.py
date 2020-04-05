@@ -9,32 +9,28 @@ from helpers.Utils import Utils
 
 
 class API:
-    def __init__(self, login, password, key):
+    def __init__(self, login, password, proxy, api_key):
         self.session = requests.Session()
         self.session.headers.update({
             'user-agent': CONSTANTS.USER_AGENT
         })
 
-        self.key = key
+        self.captcha_key = api_key
+
+        self.update_proxy(proxy)
         self.parse_token()
         self.auth(login, password)
         
     def parse_token(self):
         with self.session as s:
-            r = s.get('https://freebitco.in/?op=signup_page')
-            r.raise_for_status()
-
-            self.csrf_token = r.cookies.get('csrf_token')
+            self.csrf_token = s.get('https://freebitco.in/?op=signup_page').cookies.get('csrf_token')
 
     def parse_hash(self, token):
         with self.session as s:
-            r = s.get(f'https://freebitco.in/cgi-bin/fp_check.pl?s={token}&csrf_token={self.csrf_token}', headers={
+            return s.get(f'https://freebitco.in/cgi-bin/fp_check.pl?s={token}&csrf_token={self.csrf_token}', headers={
                 'x-csrf-token': self.csrf_token,
                 'X-Requested-With': 'XMLHttpRequest'
-            })
-            r.raise_for_status()
-
-            return r.text
+            }).text
 
     def auth(self, login, password):
         with self.session as s:
@@ -48,7 +44,6 @@ class API:
                 'btc_address': login,
                 'password': password
             })
-            r.raise_for_status()
 
             try:
                 for cookie in [requests.cookies.create_cookie(name, value, domain='freebitco.in', path='/') 
@@ -64,7 +59,6 @@ class API:
     def create_data(self) -> dict:
         with self.session as s:
             r = s.get('https://freebitco.in')
-            r.raise_for_status()
 
             soup = BeautifulSoup(r.text, 'html.parser')
 
@@ -85,18 +79,15 @@ class API:
 
             data[token_key1] = token_val1 
             data[token_key2] = token_val2
-            data['g_recaptcha_response'] = RucaptchaAPI.solve_captcha(self.key) 
+            data['g_recaptcha_response'] = RucaptchaAPI.solve_captcha(self.captcha_key) 
 
             return data
 
     def parse_coins(self):
         with self.session as s:
             r = s.get('https://freebitco.in/?op=home')
-            r.raise_for_status()
 
-            soup = BeautifulSoup(r.text, 'html.parser')
-            
-            return soup.find(id='balance_small').text        
+            return BeautifulSoup(r.text, 'html.parser').find(id='balance_small').text        
 
     def collect_coins(self, data) -> tuple:
         with self.session as s:
@@ -105,6 +96,16 @@ class API:
                 'x-csrf-token': self.csrf_token,
                 'x-requested-with': 'XMLHttpRequest'
             }, data=data)
-            r.raise_for_status()
 
-            return (r.text.split(':')[2], r.text.split(':')[3])
+            result = r.text.split(':')
+
+            if len(result) < 4:
+                raise ValueError(f'{r.text}')
+            
+            return (result[2], result[3])
+
+    def update_proxy(self, proxy):
+        if not proxy == '-':
+            self.session.proxies.update({
+                proxy.split('://')[0]: proxy
+            })

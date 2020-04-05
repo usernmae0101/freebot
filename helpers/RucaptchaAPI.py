@@ -15,13 +15,9 @@ class RucaptchaAPI:
             'googlekey': CONSTANTS.CAPTHCA_KEY,
             'pageurl': CONSTANTS.CAPTCHA_DOMAIN
         })
-        r.raise_for_status()
         
-        id = r.json()['request']
-
-        while True:
-            sleep(interval)
-            answer = cls.get_answer(key, id)
+        while sleep(interval) or True:
+            answer = cls.get_answer(key, r.json()['request'])
             if int(answer['status']) == 1:
                 return answer['request']
 
@@ -30,6 +26,5 @@ class RucaptchaAPI:
         r = rq.get('https://rucaptcha.com/res.php', params={
             'json': '1', 'key': key, 'action': 'get', 'id': id
         })
-        r.raise_for_status()
 
         return r.json()

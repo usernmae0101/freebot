@@ -1,9 +1,10 @@
-from PySide2.QtCore import Slot, Qt
+from PySide2.QtCore import Slot, Qt, QDateTime, QSettings
 from PySide2.QtGui import QPainter, QColor
 from PySide2.QtCharts import QtCharts
 from PySide2.QtWidgets import (QWidget, QTableWidget, QHBoxLayout, QTableWidgetItem,
                                QHeaderView, QLineEdit, QVBoxLayout, QPushButton)
 from time import time                               
+from ast import literal_eval
 
 from helpers import CONSTANTS
 from helpers.Bridge import Bridge
@@ -15,13 +16,14 @@ class Widget(QWidget):
 
         self.row = 0
         self.coins_sum = 0
-        self.define_table()
+        self.settings = QSettings('NoneCompany', 'freebot')
 
         VBoxLayout = QVBoxLayout() # Right
         HBoxLayout = QHBoxLayout() # Left
         
         self.create_form()
         self.set_placeholders()
+        self.define_table()
         
         FormLayout = QHBoxLayout()
         FormLayout.addWidget(self.form_login)
@@ -78,6 +80,27 @@ class Widget(QWidget):
         self.table.setHorizontalHeaderLabels(CONSTANTS.TABLE_COLUMNS)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
+        if self.settings.contains('key'):
+            self.form_key.setText( self.get_settings('key') )
+
+        if self.settings.contains('table'):
+            for row in literal_eval(self.get_settings('table')):
+                self.add_account(*row, False)
+
+    def set_settings(self, key, value):
+        if key == 'table':
+            if self.settings.contains('table'):
+                table = literal_eval(self.get_settings('table'))
+                table.append(value)
+                value = table
+            else:
+                value = [value]    
+
+        self.settings.setValue(key, str(value))
+
+    def get_settings(self, key):
+        return self.settings.value(key)    
+
     @Slot(int, list)
     def change_column_color(self, row, RGB):
         for col in range( len(CONSTANTS.TABLE_COLUMNS) ):
@@ -89,15 +112,16 @@ class Widget(QWidget):
 
     @Slot()
     def clear_table(self):
+        self.settings.clear()
         self.table.setRowCount(0)
         self.row = 0
 
     @Slot()
-    def fillin_table(self):
+    def fillin_table(self, settings=False):
         if self.check_form_state():
             return
 
-        self.add_account(self.form_login.text(),
+        self.add_account(self.form_login.text(), 
                          self.form_password.text(),
                          self.form_proxy.text())
         
@@ -109,15 +133,17 @@ class Widget(QWidget):
     def update_chart(self, data, init=False):
         self.coins_sum += data[1]
 
+        MStime_now = float(QDateTime.currentDateTime().toMSecsSinceEpoch())
+
         if init:
-            self.series.append(time(), self.coins_sum)
+            self.series.append(MStime_now, self.coins_sum)
             for i in range(6):
                 if i and not i % 2:
-                    self.series.append(time() + ((i / 100) + 0.000001), self.coins_sum)
+                    self.series.append(MStime_now + (i * 1), self.coins_sum)
                 else:
-                    self.series.append(time() + ((i / 100) + 0.000001), 0.00000001)
+                    self.series.append(MStime_now + (i * 1), 0.00000001)
         else:    
-            self.series.append(data[0], self.coins_sum)
+            self.series.append(MStime_now, self.coins_sum)
 
         chart = QtCharts.QChart()
         chart.addSeries(self.series)
@@ -133,7 +159,8 @@ class Widget(QWidget):
         self.series.attachAxis(axisX)
 
         axisY = QtCharts.QValueAxis()
-        axisY.setLabelFormat('%i')
+        axisY.setTickCount(5)
+        axisY.setLabelFormat('%.8f')
         axisY.setTitleText('coins')
         chart.addAxis(axisY, Qt.AlignLeft)
         self.series.attachAxis(axisY)
@@ -143,9 +170,12 @@ class Widget(QWidget):
     @Slot()
     def init_threads(self):
         self.start_button.setEnabled(False)
+        self.set_settings('key', self.form_key.text())
+
         self.threads = [Bridge(self, row,
                                self.table.item(row, 0).text(),
                                self.table.item(row, 1).text(),
+                               self.table.item(row, 2).text(),
                                self.form_key.text()) 
                         for row in range(self.table.rowCount())]
         
@@ -154,12 +184,16 @@ class Widget(QWidget):
         or not self.form_password.text() \
         or not self.form_proxy.text()
 
-    def add_account(self, login, password, proxy):
+    def add_account(self, login, password, proxy, record=True):
         self.table.insertRow(self.row)
 
         self.table.setItem(self.row, 0, QTableWidgetItem(login))
         self.table.setItem(self.row, 1, QTableWidgetItem(password))
         self.table.setItem(self.row, 2, QTableWidgetItem(proxy))
         self.table.setItem(self.row, 3, QTableWidgetItem('?'))
+
+        if record:
+            self.set_settings('key', self.form_key.text())
+            self.set_settings('table', [login, password, proxy])
 
         self.row += 1

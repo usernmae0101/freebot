@@ -11,13 +11,14 @@ class User(QObject):
     signal_update_column_text = Signal(int, str)
     signal_update_chart = Signal(list)
 
-    def __init__(self, index, login, password, key):
+    def __init__(self, index, login, password, proxy, key):
         QObject.__init__(self)
 
         self.key = key
         self.index = index
         self.login = login
         self.password = password
+        self.proxy = proxy
 
     def alert_user(self, success):
         self.signal_update_column_color.emit(self.index, [20, 200, 20] if success else [200, 20, 20])       
@@ -30,7 +31,7 @@ class User(QObject):
 
     def run(self):
         try:
-            self.api = API(self.login, self.password, self.key)
+            self.api = API(self.login, self.password, self.proxy, self.key)
             self.update_balance( self.api.parse_coins() )
             self.alert_user(True)
             
